@@ -1,1 +1,1 @@
-# Bayesian Optimization package for BOPP
+# Deodorant: Solving the problems of Bayesian Optimization
