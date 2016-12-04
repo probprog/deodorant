@@ -104,15 +104,5 @@
         unique-samples (if (vector? samples)
                          (mapv first freq)
                          (map first freq))
-        ;;         _ (println :prop-of-thined-hmc-samples-taken (double (/ (count unique-samples) (count samples))))
         ]
     [unique-samples weights]))
-
-;; test code
-#_(let [S (matrix [[1 0.1] [0.1 1]])
-        u (fn [x] (* 0.5 (mat/mmul (mat/mmul x Sinv) x)))
-        grad-u (fn [x] (mat/mmul Sinv x))
-        chain (hmc-chain grad-u 0.01 100 [0 0])
-        samples (take 1000 chain)]
-    ;; this should converge to S
-    (mean (map mat/outer-product samples samples)))

@@ -104,7 +104,7 @@
 
 (defn bo-acquire
   "Performs the acquisition step in Bayesian optimization. Accepts a
-  sequence of points [x y] and returns the next point x-next to
+  sequence inputs and outputs and returns the next point x-next to
   evaluate, the index of the point from those previously evaluated
   that is considered to be the best, and the predicted mean and std-dev
   of the evaluated points.  Note this std-dev is in the estimate of the
@@ -112,19 +112,31 @@
   in evaluating this function.
 
   Accepts:
-    - [[x1 y1 other] ...] vector of points where each point [xi yi other] consists of
-      + xi - D-dimensional vector of points evaluated so far and
-      + yi - scalar function evaluations of an expensive function at xi.
-      + other - some other information for that particular point, e.g. predicts from prob prog.
-    - acq-query - source code of acquisition query; used for BAMC-style optimisation.
-    - options - optional options for the BO algorithm, in the form of
-        {:gp-form-details gp-form-details
-         :gp-hyperprior-constructor gp-hyperprior-constructor
-         :hmc-options hmc-options
-         :optimizer-options optimizer-options
-         :debug-printouts true/false (default false)}
-      which will be used to overwrite the default values."
-  [X Y optimizer scaling-funcs &
+    X - matrix of input points, first dimension represents differnt points
+      second dimension the different input dimensions
+    Y - a vector of associated outputs
+    acq-optimizer - a function that takes in the acquistion function as
+      input and returns a point in the space of x that is the estimated
+      optimum of the acquisition function, subject to the constraints of
+      the model.
+    scaling-funcs - scaling function object ouput from sf/setup-scaling-funcs
+
+  Options (each of these is provide as a key value pair, defaults are
+               not provided as these are set by deodorant which calls this
+               function which should be consulted for further info)
+      cov-fn-form grad-cov-fn-hyper-form mean-fn-form
+      gp-hyperprior-form hmc-step-size hmc-num-leapfrog-steps
+      hmc-num-steps hmc-num-chains hmc-burn-in-proportion hmc-max-gps
+      verbose debug-folder plot-aq]
+
+  Returns:
+    x-next - point that should be evaluated next (optimum of the acquistion
+             function)
+    i-best - index of the point expected to be most optimal under the mixture
+             of GPs posterior
+    means - estimated mean value for each point in X.
+    std-devs - estimated standard deviation for each point in X."
+  [X Y acq-optimizer scaling-funcs &
    {:keys [cov-fn-form grad-cov-fn-hyper-form mean-fn-form
            gp-hyperprior-form hmc-step-size hmc-num-leapfrog-steps
            hmc-num-steps hmc-num-chains hmc-burn-in-proportion hmc-max-gps
@@ -163,8 +175,6 @@
         ;; create-trained-gp-obj takes x and y in the form of "points" as
         ;; passed to bo-acquire, this should be changed
 
-        ;; FIXME why have we got rid of the mean derivative but not the
-        ;;
         gp-trainer (partial gp/create-trained-gp-obj
                             mean-fn cov-fn X Y)
 
@@ -177,8 +187,6 @@
         all-means (mapv first (mapv #(% X) gp-predictors))
         mean-bests (mapv #(first (indexed-max identity %)) all-means)
 
-        ;; FIXME might be better to use the single average of the means here to recover the true expected improvement?
-
         ;; Setup the acquistion function (will be a function of the new point
         ;; x* that returns a value and a derivative)
         xi 0 ; For now we are just going to hard-code xi to 0 for simplicity
@@ -189,7 +197,7 @@
         ;; evaluate next
 
         x-next (tufte/p :acq-opt
-                        (optimizer
+                        (acq-optimizer
                           #(first (acq-fn-single %))))
         acq-opt (acq-fn-single x-next)
         _ (if verbose (println :acq-opt acq-opt))
@@ -199,8 +207,10 @@
         ;; for each of the evaluated points.  This is not only for sake
         ;; of the return arguments
         [means std-devs] (gp/gp-mixture-mu-sig gp-predictors gp-weights X)
-        [_ i-best] (indexed-max identity means)
-        ]
+        [_ i-best] (indexed-max identity means)]
+    ;; If the debug folder option is set, do some extra calculations and
+    ;; output all the results
+
     (tufte/p :db-folder
      (if debug-folder
       (let [subfolder (str "bopp-debug-files/" debug-folder "/bo-step-scaled-" (System/currentTimeMillis))
@@ -248,30 +258,92 @@
             (spit (str subfolder "/acq.csv") acq-csv)
             (spit (str subfolder "/mus.csv") means-csv)
             (spit (str subfolder "/sigs.csv") std-devs-csv)))))
+
+    ;; Final return
     [x-next i-best means std-devs])))
 
 
 
-(defn bopp-bo
-  "Runs bayesian optimization.
+(defn deodorant
+  "Deodorant: solving the problems of Bayesian optimization.
+
+  Deodorant is a Bayesian optimization (BO) package with three core features:
+    1) Domain scaling to exploit problem independent GP hyperpriors
+    2) A non-stationary mean function to allow unbounded optimization
+    3) External provision of the acquisition function optimizer so that this
+       can incorporate the constraints of the problem (inc equality constraints)
+       and ensure that no invalid points are evaluated.
+
+  The main intended use of the package at present is as the BO component
+  for BOPP (Bayesian Optimiation for Probabilistic Programs. Rainforth T, Le TA,
+  van de Meent J-W, Osborne MA, Wood F. In NIPS 2016) which provides all the
+  required inputs automatically given a program.  Even when the intention is
+  simply optimization, using BOPP rather than Deodorant directly is currently
+  recommended.  The rational of providing Deodorant as its own independent
+  package is to seperate out the parts of BOPP that are Anglican dependent and
+  those that are not.  As such, one may wish to intergrate Deodorant into
+  another similar package that provides all the required inputs.
+
+  For details on the working of Deodorant, the previously referenced paper and
+  its supplementary material should be consulted.
 
   Accepts:
-    f - target function
-    aq-optimizer - acquisition function optimizer
-    theta-sampler - ??
+    f - target function.  Takes in a single input x and returns a pair
+        [f(x), other-outputs(x)].  Here other-outputs allows for additional x
+        dependent variables to be returned.  For example, in BOPP then
+        other-outputs(x) is a vector of program outputs from the calling the
+        marginal query, with one component for each sample output from
+        this marginal query.
+    acq-optimizer - a function that takes in the acquistion function as
+        input and returns a point in the space of x that is the estimated
+        optimum of the acquisition function, subject to the constraints of
+        the model.
+    theta-sampler - charecterization of the input variables which can be
+        sampled from to generate example inputs and initialize the scaling.
+        Should be a function that takes no inputs and results valid examples
+        of the input variables.  Note that the input variables are currently
+        called x in the inner functions.
+
+  Optional Inputs: (defined with key value pairs)
+    Initialization options:
+      :initial-points - Points to initialize BO in addition to those sampled
+                       by theta-sampler
+      :num-scaling-thetas - Number of points used to initialize scaling
+      :num-initial-points - Number of points to initialize BO
+
+    GP options:
+      :cov-fn-form
+      :grad-cov-fn-hyper
+      :mean-fn-form
+      :gp-hyperprior-form
+
+    HMC options:
+      :hmc-step-size - HMC step size
+      :hmc-num-leapfrog-steps - Number of HMC leap-frog steps
+      :hmc-num-chains - Number of samplers run in parallel
+      :hmc-burn-in-proportion - Proportion of samples to throw away as burn in
+      :hmc-max-gps - Maximum number of unique GPs to keep at the end so that
+                     optimization of the acqusition function does not become
+                     too expensive.
+    Debug options:
+      :verbose - Allow debug print outs [boolean]
+      :debug-folder - Path for the debug folder.  No output generated if path
+                not  provided.  These outputs include alphas (gp hyper paramters),
+                gp-weights (weights for each hyperparameter sample), [string] FIXME write
+      :bo-plot-aq - Generate debugging csv of acquisition functions [boolean]
 
   Returns:
     Lazy list of increasingly optimal triples
     (theta, main output of f, other outputs of f)."
   [f aq-optimizer theta-sampler &
-   {:keys [initial-points num-scaling-thetas num-initial-thetas cov-fn-form
+   {:keys [initial-points num-scaling-thetas num-initial-points cov-fn-form
            grad-cov-fn-hyper-form mean-fn-form gp-hyperprior-form
            hmc-step-size hmc-num-leapfrog-steps hmc-num-steps hmc-num-chains
            hmc-burn-in-proportion hmc-max-gps verbose debug-folder plot-aq]
     :or {;; Initialization options
          initial-points nil
          num-scaling-thetas 50
-         num-initial-thetas 5
+         num-initial-points 5
 
          ;; BO options
          cov-fn-form cf/matern32-plus-matern52-K
@@ -297,14 +369,14 @@
       (.mkdir (java.io.File. (str "bopp-debug-files/" debug-folder)))))
   (let [
         ;; Sample some thetas to use for scaling
-        num-scaling-thetas (max num-initial-thetas num-scaling-thetas)
+        num-scaling-thetas (max num-initial-points num-scaling-thetas)
         scaling-thetas (theta-sampler num-scaling-thetas)
 
         ;; FIXME add code to keep randomly sampling until distinct inputs and distinct outputs have been found
 
         ;; Choose a subset of scaling thetas and evaluate as the starting points
         initial-thetas (mapv #(nth scaling-thetas %)
-                             (take num-initial-thetas
+                             (take num-initial-points
                                    (shuffle (range 0 (count scaling-thetas)))))
 
         initial-points (concat initial-points
@@ -325,7 +397,7 @@
                   (println :initial-log-Zs initial-log-Zs)))
     (letfn [(point-seq [points scale-details]
                        (lazy-seq
-                        (let [_ (if verbose (println :BO-Iteration (inc (- (count points) num-initial-thetas))))
+                        (let [_ (if verbose (println :BO-Iteration (inc (- (count points) num-initial-points))))
                               scaling-funcs (sf/setup-scaling-funcs
                                              scale-details)
 

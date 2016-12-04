@@ -17,13 +17,7 @@
    :grad-log-p returns a nested vector of the same size as sampler
                does corresponding to the gradient of that hyperparameter"
   [dim]
-  (let [; WE MAY WELL NEED TO FIDDLE WITH THESE NUMBERS
-        ; THEY ARE A LITTLE PLUCKED OUT A HAT BUT THE MAIN
-        ; IDEA IS THAT THEY SHOULD REFLECT A SORT OF PRIOR
-        ; OVER THE KIND OF DATASETS WE EXPECT TO SEE.
-        ; NOTE THAT WE ARE SCALING THE DATA SUCH THAT X AND Y
-        ; ARE ALL BETWEEN -1 AND 1
-        log-sig-noise-mean       -7
+  (let [log-sig-noise-mean       -7
         log-sig-noise-std-dev    1
         log-sig-f-mean-32        -3
         log-sig-f-std-32         0.25

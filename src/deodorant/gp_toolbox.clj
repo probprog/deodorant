@@ -229,7 +229,7 @@
 
         mus (bf/safe-sum (mul mu-samples gp-weights) 1)
 
-        ; eq A.1.8 in mikes thesis
+        ; eq A.1.8 in Mike Osborne's thesis
         sigs (sqrt (sub (bf/safe-sum (mul (add (pow sig-samples 2)
                                                        (pow mu-samples 2))
                                               gp-weights)
@@ -237,7 +237,9 @@
                                 (pow mus 2)))]
       [mus sigs]))
 
-;;;;;;;;;;;;;;  These are not actively used by BOPP but are useful GP functions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;  These are not used by default usage of  ;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;  Deodorant but are useful GP functions  ;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;  one may wish to exploit in custom usage ;;;;;;;;;;;;;;s
 
 
 (defn gp-predict-with-derivatives
