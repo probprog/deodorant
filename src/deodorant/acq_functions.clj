@@ -5,7 +5,10 @@
             [deodorant.helper-functions :refer [erf observe* normal]]))
 
 (defn- normal-cdf
-  "Normal cumulative density function."
+  "Normal cumulative density function.
+
+  Accepts: mean, standard dev, x
+  Returns: cdf(x)"
   [mean stdd x]
   (let [xp (/ (- x mean) (* stdd (Math/sqrt 2)))]
     (* 1/2 (+ 1 (if (> xp 0)
@@ -56,6 +59,8 @@
     base-aq-func - Function which takes as inputs a gp-predictor
                    and a point to evaluate, returning a utility of
                    evaluating that point.
+    mu-bests - The best of the expected best point previously
+               evaluated for each GP, mu_j^+ in the paper.
     gp-predicters - A collection of gp-prediction functions.  Each
                     takes a point to evaluate an returns [mu sig]
     gp-weights - Vector of weights for each gp-predictor.  The

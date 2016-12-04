@@ -56,7 +56,12 @@
 (defn safe-sum
   "Sums out a dimension of nd-array.  Takes an array
    of matrix type and a dimension to sum out. Ensures
-   no crash if X is nil"
+   no crash if X is nil.
+
+  Accepts: X - matrix
+         dim - dimension to remove.
+
+  Returns: X with dim summed out"
   [X dim]
   (if (or (= nil (first X)) (> dim (dec (count (shape X)))))
     X
@@ -79,36 +84,11 @@
       (op NNb NDN)
       (op NDN NNb))))
 
-(defn bsxfun-common-dims-first
-  "Does an arbitrary bsxfun with the contraint that the common dimensions
-   must come before the missing dimensions.
-
-   Accepts:  op  - matrix operation to perform (must be from core.matrix)
-             M1  - arbitrary array
-             M2  - arbitrary array with matching first (min (count (shape M1)) (count (shape M2))) dimensions
-             b-Flip (optional, default false) - if true the do (op M2 M1) instead of (op M1 M2)
-
-   Returns:   Array of with dimension equal to maximum of either M1 or M2"
-  [op M1 M2 & b-Flip]
-  (if (or (= (first M1) nil) (= (first M2) nil))
-    (vec (repeat (max (first (shape M1)) (first (shape M2))) nil))
-    (let [M1        (matrix M1)
-        M2        (matrix M2)
-        s-M1      (shape M1)
-        s-M2      (shape M2)
-        ndim1     (count s-M1)
-        ndim2     (count s-M2)
-        [M1 M2]   (mapv transpose [M1 M2])
-        [M1 M2]   (if (> ndim1 ndim2)
-                    [M1 (broadcast M2 (vec (rseq s-M1)))]
-                    [(broadcast M1 (vec (rseq s-M2))) M2])]
-    (if b-Flip
-      (transpose (op M2 M1))
-      (transpose (op M1 M2))))))
-
 (defn safe-broadcast-op
   "Calls broadcast-function-NxD-MxD when given arrays and
-  just does standard broadcasting if one is a vector"
+  just does standard broadcasting if one is a vector.
+  See broadcast-function-NxD-MxD for details on call
+  structure."
   [op M1 M2 & b-Flip]
   (let [[_ D1] (shape M1)
         [_ D2] (shape M2)]
