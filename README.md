@@ -9,7 +9,7 @@ Deodorant is a Bayesian optimization package with three core features:
 3. External provision of the acquisition function optimizer so that this can incorporate the constraints of the problem (inc equality constraints) and ensure that no invalid points are evaluated.
 \end{enumerate}
   
-The main intended use of the package at present is as the BO component for BOPP (Bayesian Optimiation for Probabilistic Programs. Rainforth T, Le TA,
+The main intended use of the package at present is as the BO component for [BOPP](https://github.com/twgr/bopp) (Bayesian Optimiation for Probabilistic Programs. Rainforth T, Le TA,
   van de Meent J-W, Osborne MA, Wood F. In NIPS 2016) which provides all the
   required inputs automatically given a program.  Even when the intention is
   simply optimization, using BOPP rather than Deodorant directly is currently
