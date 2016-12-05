@@ -55,8 +55,7 @@
   (try
     (apply lbfgs f x0 max-iters)
     (catch Exception e
-      (do (if verbose (println "lbgfs solver failed, aborting this optimization start"))
-        x0))))
+        x0)))
 
 (defn lbfgs-maximize
   "Runs gradient ascent (LBFGS) to find a local optimum.
