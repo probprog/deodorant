@@ -64,3 +64,33 @@
         [_ log-Z-unscaler log-Z-unscaler-no-centering log-Z-scaler] (scale [(:log-Z-min scale-details) (:log-Z-max scale-details)])]
     (->scaling-funcs-obj
        theta-scaler theta-unscaler theta-unscaler-no-centering log-Z-scaler log-Z-unscaler log-Z-unscaler-no-centering)))
+
+(defn unflatten-from-sizes
+  [sizes x]
+  (let [sizes-this (first sizes)
+        z-this (if (= (count sizes-this) 2)
+                 (-> (take (reduce * sizes-this) x)
+                     (mat/reshape sizes-this))
+                 (if (= (first sizes-this) 1)
+                   (first x)
+                   (take (first sizes-this) x)))
+        z-rest (if (empty? (rest sizes))
+                 nil
+                 (unflatten-from-sizes (rest sizes) (into [] (drop (reduce * sizes-this) x))))]
+    (into [] (concat [z-this] z-rest))))
+
+(defn flatten-unflatten
+  "Returns functions for flattening and unflattening the thetas.  For example
+   when sampling from a multivariate normal theta will be a nested vector
+  TODO make me work for matrices"
+  [x]
+  (let [types (map type x)
+        sizes (mapv (fn [v] (if (instance? mikera.vectorz.Vector v)
+                             (mat/shape v))
+                             (if (or (vector? v) (list? v) (set? v) (coll? v) (seq? v))
+                                 [(count v)]
+                                 [1]))
+                   x)
+        flatten-f (fn [y] (into [] (flatten y)))
+        unflatten-f (partial unflatten-from-sizes sizes)]
+    [flatten-f unflatten-f]))

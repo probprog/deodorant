@@ -17,14 +17,14 @@
    :grad-log-p returns a nested vector of the same size as sampler
                does corresponding to the gradient of that hyperparameter"
   [dim]
-  (let [log-sig-noise-mean       -7
-        log-sig-noise-std-dev    1
-        log-sig-f-mean-32        -3
-        log-sig-f-std-32         0.25
-        log-rho-mean-32          -2.5
+  (let [log-sig-noise-mean       -5
+        log-sig-noise-std-dev    2
+        log-sig-f-mean-32        -7
+        log-sig-f-std-32         0.5
+        log-rho-mean-32          -1.5
         log-rho-std-dev-32       0.5
         log-sig-f-mean-52        -0.5
-        log-sig-f-std-52         0.1
+        log-sig-f-std-52         0.15
         log-rho-mean-52          -1
         log-rho-std-dev-52       0.5
         dist-h-32   (hyper/constant-length-distance-hyperprior

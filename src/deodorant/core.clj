@@ -12,6 +12,7 @@
             [deodorant.covar-functions :as cf]
             [deodorant.default-params :as dp]
             [deodorant.helper-functions :refer [indexed-max cartesian mean]]
+            [bozo.core :refer [lbfgs]]
             [clojure-csv.core :refer :all]))
 
 (defn- hyper-prior-log-posterior
@@ -48,13 +49,42 @@
                            grad-cov-fn-hyper x-diff-sq alpha L psi)]
     (mat/add grad-log-lik-gp (hyper-prior-grad-log-p alpha))))
 
+(defn call-lbfgs-ignoring-failure
+  "Calls lbfgs within a try catch and just returns start point if it fails"
+  [f x0 max-iters verbose]
+  (try
+    (apply lbfgs f x0 max-iters)
+    (catch Exception e
+      (do (if verbose (println "lbgfs solver failed, aborting this optimization start"))
+        x0))))
+
+(defn lbfgs-maximize
+  "Runs gradient ascent (LBFGS) to find a local optimum.
+  .  Uses bozo which unfortunately appears to not allow
+   distribution (i.e. pmap) because it uses immutable objects that
+   end up shared between runs.
+  Accepts:
+    x-start - Start points
+    target-fn - Function to optimize.
+
+  Returns:
+    x* - D-dimensional vector argmax_x acq_fn(x)."
+  [x-start target-fn max-iters]
+  (let [;; THIS WANTS TO BE PMAP INSTEAD OF MAP BUT THIS CAUSES RANDOM FUCKUPS IN BOZO
+        x-start (double-array x-start)
+        f (fn [x] (let [[y gy] (target-fn (vec x))] [(double (- y)) (double-array (mat/sub gy))]))
+        x-max (vec (call-lbfgs-ignoring-failure f x-start max-iters)) ; Add :iprint [1 3] to options keymap for loads of print outs
+        ]
+    x-max))
+
+
 (defn infer-gp-hyper
   "Takes a mean-fn, a cov-fn (with unset hyperparameters), a
    series of points and hyper-prior and returns a weighted set
    of hyperparameter samples using a HMC sampler"
   [X Y &
    {:keys [mean-fn cov-fn grad-cov-fn-hyper gp-hyperprior hmc-step-size
-           hmc-num-leapfrog-steps hmc-num-steps hmc-num-chains
+           hmc-num-leapfrog-steps hmc-num-mcmc-steps hmc-num-opt-steps hmc-num-chains
            hmc-burn-in-proportion hmc-max-gps]
     :or {}}]
   (let [;; working with a zero mean GP and adding mean in later
@@ -73,16 +103,15 @@
 
         ;; select the points at which to initialize the hmc chains
         alpha-starts   (map vec (dp/default-hmc-initializer hmc-num-chains gp-hyperprior))
-
-        start-grads (mapv grad-u alpha-starts)
-        abs-start-grads (mapv mat/abs start-grads)
-        mean-abs-start-grads (mean abs-start-grads 0)
-        eps-scaled (mop/min (mat/div hmc-step-size mean-abs-start-grads)
-                            (vec (repeat (first (mat/shape mean-abs-start-grads))
-                                         hmc-step-size)))
-
+        D (first (mat/shape (first alpha-starts)))
+        ; Make sure that all alphas are within the range where they won't cause issue
+        ; Can probably make this larger than 9
+        alpha-starts (mapv #(mop/min (repeat D 9) (mop/max (repeat D -9) %)) alpha-starts)
+        f_grad_f (fn [x] (vec [(f x) (grad-f x)]))
+        alpha-starts (map #(lbfgs-maximize % f_grad_f hmc-num-opt-steps) alpha-starts)
+        hmc-step-size-scaled (vec (repeat D hmc-step-size))
         call-hmc-sampler   (fn [q-start]
-                             (take hmc-num-steps (hmc/hmc-chain u grad-u eps-scaled hmc-num-leapfrog-steps q-start)))
+                             (take hmc-num-mcmc-steps (hmc/hmc-chain u grad-u hmc-step-size-scaled hmc-num-leapfrog-steps q-start)))
         thin-rate 1 ; Now using max-n-gps instead
         [alpha-samples weights] (->> (pmap (fn [x]
                                              (hmc/burn-in-and-thin
@@ -126,8 +155,8 @@
                function which should be consulted for further info)
       cov-fn-form grad-cov-fn-hyper-form mean-fn-form
       gp-hyperprior-form hmc-step-size hmc-num-leapfrog-steps
-      hmc-num-steps hmc-num-chains hmc-burn-in-proportion hmc-max-gps
-      verbose debug-folder plot-aq]
+      hmc-num-mcmc-steps hmc-num-opt-steps hmc-num-chains
+      hmc-burn-in-proportion hmc-max-gps verbose debug-folder plot-aq]
 
   Returns:
     x-next - point that should be evaluated next (optimum of the acquistion
@@ -139,8 +168,9 @@
   [X Y acq-optimizer scaling-funcs &
    {:keys [cov-fn-form grad-cov-fn-hyper-form mean-fn-form
            gp-hyperprior-form hmc-step-size hmc-num-leapfrog-steps
-           hmc-num-steps hmc-num-chains hmc-burn-in-proportion hmc-max-gps
-           verbose debug-folder plot-aq]
+           hmc-num-mcmc-steps hmc-num-opt-steps hmc-num-chains
+           hmc-burn-in-proportion hmc-max-gps verbose
+           debug-folder plot-aq]
     :or {}}]
   (let [[_ D] (mat/shape X)
         mean-fn (mean-fn-form D)
@@ -162,7 +192,8 @@
                                         ;; HMC options
                                         :hmc-step-size hmc-step-size
                                         :hmc-num-leapfrog-steps hmc-num-leapfrog-steps
-                                        :hmc-num-steps hmc-num-steps
+                                        :hmc-num-mcmc-steps hmc-num-mcmc-steps
+                                        :hmc-num-opt-steps hmc-num-opt-steps
                                         :hmc-num-chains hmc-num-chains
                                         :hmc-burn-in-proportion hmc-burn-in-proportion
                                         :hmc-max-gps hmc-max-gps))
@@ -262,8 +293,6 @@
     ;; Final return
     [x-next i-best means std-devs])))
 
-
-
 (defn deodorant
   "Deodorant: solving the problems of Bayesian optimization.
 
@@ -304,33 +333,49 @@
         of the input variables.  Note that the input variables are currently
         called x in the inner functions.
 
-  Optional Inputs: (defined with key value pairs)
+  Optional Inputs: (defined with key value pairs, default values shown below
+                    in brackets)
     Initialization options:
       :initial-points - Points to initialize BO in addition to those sampled
                        by theta-sampler
+        [nil]
       :num-scaling-thetas - Number of points used to initialize scaling
+        [50]
       :num-initial-points - Number of points to initialize BO
+        [5]
 
     GP options:
-      :cov-fn-form
-      :grad-cov-fn-hyper
-      :mean-fn-form
-      :gp-hyperprior-form
+      :cov-fn-form - covariance function with unset hyperparameters
+        [cp/matern32-plus-matern52-K]
+      :grad-cov-fn-hyper - grad of the above with respect to the hyperparameters
+        [cp/matern32-plus-matern52-grad-K]
+      :mean-fn-form - mean function with unset dimensionality
+        [dp/default-mean-fn-form]
+      :gp-hyperprior-form - constructor for the gp hyperparameter hyperprior
+        [dp/default-double-matern-hyperprior]
 
     HMC options:
       :hmc-step-size - HMC step size
+        [0.3]
       :hmc-num-leapfrog-steps - Number of HMC leap-frog steps
+        [5]
       :hmc-num-chains - Number of samplers run in parallel
+        [50]
       :hmc-burn-in-proportion - Proportion of samples to throw away as burn in
+        [8]
       :hmc-max-gps - Maximum number of unique GPs to keep at the end so that
                      optimization of the acqusition function does not become
                      too expensive.
+        [50]
     Debug options:
-      :verbose - Allow debug print outs [boolean]
+      :verbose - Allow debug print outs
+        [false]
       :debug-folder - Path for the debug folder.  No output generated if path
                 not  provided.  These outputs include alphas (gp hyper paramters),
-                gp-weights (weights for each hyperparameter sample), [string] FIXME write
-      :bo-plot-aq - Generate debugging csv of acquisition functions [boolean]
+                gp-weights (weights for each hyperparameter sample) etc
+        [empty]
+      :bo-plot-aq - Generate debugging csv of acquisition functions
+        [false]
 
   Returns:
     Lazy list of increasingly optimal triples
@@ -338,11 +383,11 @@
   [f aq-optimizer theta-sampler &
    {:keys [initial-points num-scaling-thetas num-initial-points cov-fn-form
            grad-cov-fn-hyper-form mean-fn-form gp-hyperprior-form
-           hmc-step-size hmc-num-leapfrog-steps hmc-num-steps hmc-num-chains
-           hmc-burn-in-proportion hmc-max-gps verbose debug-folder plot-aq]
+           hmc-step-size hmc-num-leapfrog-steps hmc-num-mcmc-steps hmc-num-opt-steps
+           hmc-num-chains hmc-burn-in-proportion hmc-max-gps verbose debug-folder plot-aq]
     :or {;; Initialization options
          initial-points nil
-         num-scaling-thetas 50
+         num-scaling-thetas 1000
          num-initial-points 5
 
          ;; BO options
@@ -352,9 +397,10 @@
          gp-hyperprior-form dp/default-double-matern-hyperprior
 
          ;; HMC options
-         hmc-step-size 0.3
+         hmc-step-size 0.01
          hmc-num-leapfrog-steps 5
-         hmc-num-steps 50
+         hmc-num-mcmc-steps 50
+         hmc-num-opt-steps 15
          hmc-num-chains 8
          hmc-burn-in-proportion 0.5
          hmc-max-gps 50
@@ -371,6 +417,8 @@
         ;; Sample some thetas to use for scaling
         num-scaling-thetas (max num-initial-points num-scaling-thetas)
         scaling-thetas (theta-sampler num-scaling-thetas)
+        [flat-f unflat-f] (sf/flatten-unflatten (first scaling-thetas))
+        scaling-thetas (mapv flat-f scaling-thetas)
 
         ;; FIXME add code to keep randomly sampling until distinct inputs and distinct outputs have been found
 
@@ -379,9 +427,12 @@
                              (take num-initial-points
                                    (shuffle (range 0 (count scaling-thetas)))))
 
+        b-integer (mapv #(or (instance? Long %) (instance? Integer %)) (first initial-thetas))
+
         initial-points (concat initial-points
                                (map #(into []
-                                           (cons % (f %))) initial-thetas))
+                                           (cons % (f %)))
+                                    (mapv unflat-f initial-thetas)))
 
         ;; Setup the scaling details
         theta-min (reduce clojure.core.matrix.operators/min scaling-thetas)
@@ -397,11 +448,11 @@
                   (println :initial-log-Zs initial-log-Zs)))
     (letfn [(point-seq [points scale-details]
                        (lazy-seq
-                        (let [_ (if verbose (println :BO-Iteration (inc (- (count points) num-initial-points))))
+                        (let [_ (if verbose (println :BO-Iteration (inc (- (count points) (inc num-initial-points)))))
                               scaling-funcs (sf/setup-scaling-funcs
                                              scale-details)
 
-                              theta-scaler (:theta-scaler scaling-funcs)
+                              theta-scaler (comp (:theta-scaler scaling-funcs) flat-f)
                               log-Z-scaler (:log-Z-scaler scaling-funcs)
 
                               aq-optimizer-scaled (fn [acq-fn]
@@ -411,8 +462,9 @@
                                                         (apply acq-fn (theta-scaler theta) args))))) ; takes in a function to optimize
 
                               [theta-next-sc i-best mean-thetas-sc std-dev-thetas-sc]
-                              (bo-acquire (theta-scaler
-                                           (mapv first points))
+                              (bo-acquire ((:theta-scaler scaling-funcs)
+                                            (mapv flat-f
+                                                  (mapv first points)))
                                           (log-Z-scaler
                                            (mapv second points))
                                           aq-optimizer-scaled
@@ -429,7 +481,8 @@
                                           ;; HMC options
                                           :hmc-step-size hmc-step-size
                                           :hmc-num-leapfrog-steps hmc-num-leapfrog-steps
-                                          :hmc-num-steps hmc-num-steps
+                                          :hmc-num-mcmc-steps hmc-num-mcmc-steps
+                                          :hmc-num-opt-steps hmc-num-opt-steps
                                           :hmc-num-chains hmc-num-chains
                                           :hmc-burn-in-proportion hmc-burn-in-proportion
                                           :hmc-max-gps hmc-max-gps
@@ -441,6 +494,14 @@
 
                               theta-next ((:theta-unscaler scaling-funcs)
                                           theta-next-sc)
+                              ;; Anything that is discrete we need to make sure it
+                              ;; is the right type.  Note that it shoud still be integer
+                              ;; valued, but it still needs its type to be changed.
+                              theta-next (mapv #(if %1
+                                                   (int (+ 0.49 %2))
+                                                   %2)
+                                            b-integer theta-next)
+                              theta-next (unflat-f theta-next)
                               mean-thetas ((:log-Z-unscaler scaling-funcs)
                                          mean-thetas-sc)
                               std-dev-thetas ((:log-Z-unscaler-no-centering scaling-funcs)
@@ -469,6 +530,6 @@
                                            (sf/update-scale-details
                                             scale-details
                                             scaling-funcs
-                                            theta-next
+                                            (flat-f theta-next)
                                             log-Z))))))]
       (point-seq initial-points scale-details-initial))))

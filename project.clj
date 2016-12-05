@@ -4,4 +4,14 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [clatrix "0.5.0"]])
+                 [clojure-csv/clojure-csv "2.0.1"]
+                 [clatrix "0.5.0"]
+                 [org.clojure/core.memoize "0.5.8"]
+                 [org.apache.commons/commons-math3 "3.6.1"]
+                 [bozo/bozo "0.1.1"]
+                 [colt "1.2.0"]
+                 [net.mikera/core.matrix "0.49.0"]
+                 [net.mikera/core.matrix.stats "0.7.0"]
+                 [net.mikera/vectorz-clj "0.43.1"]
+                 [org.clojure/tools.namespace "0.2.11"]
+                 [com.taoensso/tufte "1.0.0-RC2"]])

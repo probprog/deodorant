@@ -54,10 +54,20 @@
                              [q-end p-end] (hmc-integrate grad-u eps num-steps
                                                           q-start p-start)
                              k-start (* 0.5 (sum (sq p-start)))
-                             k-end (* 0.5 (sum (sq p-end)))]
-                         [(Math/exp (+ (- (u q-start) (u q-end))
-                                       (- k-start k-end)))
-                          q-end])
+                             k-end (* 0.5 (sum (sq p-end)))
+                             u-start (u q-start)
+                             u-end (u q-end)
+                             accept-prob (Math/exp (+ (- u-start u-end)
+                                                      (- k-start k-end)))
+                             ; To guard against rejecting huge improvements due to numerical
+                             ; precision, accept anything where the probability increases by
+                             ; a certain amount
+                             accept_force_threshold 5
+                             accept-prob (if (> (- u-start u-end) accept_force_threshold)
+                                            1
+                                            accept-prob)]
+                            [accept-prob
+                             q-end])
                        (catch Exception e
                          [0.0 nil]))
         ]
