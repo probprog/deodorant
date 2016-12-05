@@ -397,12 +397,12 @@
 
          ;; HMC options
          hmc-step-size 0.01
-         hmc-num-leapfrog-steps 5
-         hmc-num-mcmc-steps 50
-         hmc-num-opt-steps 15
-         hmc-num-chains 8
+         hmc-num-leapfrog-steps 2; 5
+         hmc-num-mcmc-steps 20; 50
+         hmc-num-opt-steps 10; 15
+         hmc-num-chains 4; 8
          hmc-burn-in-proportion 0.5
-         hmc-max-gps 50
+         hmc-max-gps 20; 50
 
          ;; Debug options
          verbose false
