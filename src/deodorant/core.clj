@@ -42,7 +42,7 @@
             alpha                     current value of the hyperparameters
 
    Returns: grad-log-p for the posterior including terms from gp"
-   [hyper-prior-grad-log-p cov-fn grad-cov-fn-hyper x-diff-sq y-bar alpha]
+   [hyper-prior-grad-log-p cov-fn grad-cov-fn-hyper x-diff-sq y-bar b-deterministic alpha]
   (let [[L psi]          (gp/gp-train
                            cov-fn x-diff-sq y-bar alpha)
         grad-log-lik-gp  (gp/gp-grad-log-likelihood
@@ -84,7 +84,7 @@
   [X Y &
    {:keys [mean-fn cov-fn grad-cov-fn-hyper gp-hyperprior hmc-step-size
            hmc-num-leapfrog-steps hmc-num-mcmc-steps hmc-num-opt-steps hmc-num-chains
-           hmc-burn-in-proportion hmc-max-gps]
+           hmc-burn-in-proportion hmc-max-gps b-deterministic]
     :or {}}]
   (let [;; working with a zero mean GP and adding mean in later
         y-bars         (gp/subtract-mean-fn mean-fn X Y)
@@ -94,7 +94,7 @@
 
         ;; function and its gradient for the log posterior of the gp hyperparameters
         f              (partial hyper-prior-log-posterior (:log-p gp-hyperprior) cov-fn x-diffs-sq y-bars)
-        grad-f         (partial grad-hyper-prior-log-posterior (:grad-log-p gp-hyperprior) cov-fn grad-cov-fn-hyper x-diffs-sq y-bars)
+        grad-f         (partial grad-hyper-prior-log-posterior (:grad-log-p gp-hyperprior) cov-fn grad-cov-fn-hyper x-diffs-sq y-bars b-deterministic)
 
         ;; hmc needs negative of this
         u              (fn [alpha] (- (f alpha)))            ; MEMOIZE ME
@@ -169,13 +169,13 @@
            gp-hyperprior-form hmc-step-size hmc-num-leapfrog-steps
            hmc-num-mcmc-steps hmc-num-opt-steps hmc-num-chains
            hmc-burn-in-proportion hmc-max-gps verbose
-           debug-folder plot-aq]
+           debug-folder plot-aq b-deterministic]
     :or {}}]
   (let [[_ D] (mat/shape X)
         mean-fn (mean-fn-form D)
         cov-fn (cf/matern-for-vector-input D cov-fn-form)
         grad-cov-fn-hyper (cf/matern-for-vector-input D grad-cov-fn-hyper-form)
-        gp-hyperprior (gp-hyperprior-form D)
+        gp-hyperprior (gp-hyperprior-form D b-deterministic)
 
         ;; Obtain particle estimate of predictive distribution on GP
         ;; hyperparameters
@@ -187,6 +187,7 @@
                                         :cov-fn cov-fn
                                         :grad-cov-fn-hyper grad-cov-fn-hyper
                                         :gp-hyperprior gp-hyperprior
+                                        :b-deterministic b-deterministic  ;; FIXME make this less of a hack
 
                                         ;; HMC options
                                         :hmc-step-size hmc-step-size
@@ -199,7 +200,7 @@
         alphas (map first alpha-particles)
         gp-weights (map second alpha-particles)
 
-        _ (if verbose (println :n-gps-in-acq-function (count gp-weights)))
+        ;; _ (if verbose (println :n-gps-in-acq-function (count gp-weights)))
 
         ;; function to create a trained-gp-obj for a given alpha currently
         ;; create-trained-gp-obj takes x and y in the form of "points" as
@@ -230,7 +231,7 @@
                         (acq-optimizer
                           #(first (acq-fn-single %))))
         acq-opt (acq-fn-single x-next)
-        _ (if verbose (println :acq-opt acq-opt))
+        ;; _ (if verbose (println :acq-opt acq-opt))
 
 
         ;; Establish which point is best so far and the mean and std dev
@@ -352,6 +353,8 @@
         [dp/default-mean-fn-form]
       :gp-hyperprior-form - constructor for the gp hyperparameter hyperprior
         [dp/default-double-matern-hyperprior]
+      :b-deterministic - whether to include noise in the GP
+        [false]
 
     HMC options:
       :hmc-step-size - HMC step size
@@ -381,7 +384,7 @@
     (theta, main output of f, other outputs of f)."
   [f aq-optimizer theta-sampler &
    {:keys [initial-points num-scaling-thetas num-initial-points cov-fn-form
-           grad-cov-fn-hyper-form mean-fn-form gp-hyperprior-form
+           grad-cov-fn-hyper-form mean-fn-form gp-hyperprior-form b-deterministic
            hmc-step-size hmc-num-leapfrog-steps hmc-num-mcmc-steps hmc-num-opt-steps
            hmc-num-chains hmc-burn-in-proportion hmc-max-gps verbose debug-folder plot-aq]
     :or {;; Initialization options
@@ -394,6 +397,7 @@
          grad-cov-fn-hyper-form cf/matern32-plus-matern52-grad-K
          mean-fn-form dp/default-mean-fn-form
          gp-hyperprior-form dp/default-double-matern-hyperprior
+         b-deterministic false
 
          ;; HMC options
          hmc-step-size 0.01
@@ -443,11 +447,11 @@
                                                       theta-max
                                                       log-Z-min
                                                       log-Z-max)]
-    (if verbose (do (println :initial-thetas initial-thetas)
-                  (println :initial-log-Zs initial-log-Zs)))
+;;     (if verbose (do (println :initial-thetas initial-thetas)
+;;                   (println :initial-log-Zs initial-log-Zs)))
     (letfn [(point-seq [points scale-details]
                        (lazy-seq
-                        (let [_ (if verbose (println :BO-Iteration (inc (- (count points) (inc num-initial-points)))))
+                        (let [_ (if verbose (println "BO Iteration: " (inc (- (count points) (inc num-initial-points)))))
                               scaling-funcs (sf/setup-scaling-funcs
                                              scale-details)
 
@@ -476,6 +480,7 @@
                                           :cov-fn-form cov-fn-form
                                           :grad-cov-fn-hyper-form grad-cov-fn-hyper-form
                                           :gp-hyperprior-form gp-hyperprior-form
+                                          :b-deterministic b-deterministic
 
                                           ;; HMC options
                                           :hmc-step-size hmc-step-size
@@ -507,13 +512,14 @@
                                           std-dev-thetas-sc)
 
                               _ (if verbose (do
-                                              (println :theta-best (first (nth points i-best)) "   "
-                                                       :log-Z-theta-best (second (nth points i-best)) "   "
-                                                       :mean-theta-best (nth mean-thetas i-best) "   "
-                                                       :std-dev-theta-best (nth std-dev-thetas i-best) "   "
-                                                       :i-best i-best)
-                                              (println :theta-next theta-next)
-                                              (println "Calling original query with theta next  ")))
+;;                                               (println :theta-best (first (nth points i-best)) "   "
+;;                                                        :log-Z-theta-best (second (nth points i-best)) "   "
+;;                                                        :mean-theta-best (nth mean-thetas i-best) "   "
+;;                                                        :std-dev-theta-best (nth std-dev-thetas i-best) "   "
+;;                                                        :i-best i-best)
+                                              (println "Theta to evaluate next: " theta-next)
+;;                                               (println "Calling original query with theta next  ")
+                                              ))
 
                               [log-Z results] (f theta-next)
                               points (conj points
@@ -521,9 +527,9 @@
                               return-val (-> (nth points (inc i-best))
                                              (assoc 1 (nth mean-thetas i-best)))
 
-                              _ (if verbose (println :log-Z-theta-next log-Z))
-                              _ (if verbose (println :log-Z-i-best (second (nth points (inc i-best)))))
-                              _ (if verbose (println :theta-mean-best (take 2 return-val)))]
+                              ;;_ (if verbose (println :log-Z-i-best (second (nth points (inc i-best)))))
+                              _ (if verbose (println "Best theta and associated output so far: " (take 2 return-val)))
+                              _ (if verbose (println "Function value at theta next: " log-Z "\n"))]
                           (cons return-val
                                 (point-seq points
                                            (sf/update-scale-details

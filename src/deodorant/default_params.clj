@@ -16,9 +16,9 @@
    :log-p returns a scalar given a set of parameters
    :grad-log-p returns a nested vector of the same size as sampler
                does corresponding to the gradient of that hyperparameter"
-  [dim]
-  (let [log-sig-noise-mean       -5
-        log-sig-noise-std-dev    2
+  [dim b-deterministic]
+  (let [log-sig-noise-mean       (if b-deterministic -9 -5)
+        log-sig-noise-std-dev    (if b-deterministic 0.1 2)
         log-sig-f-mean-32        -7
         log-sig-f-std-32         0.5
         log-rho-mean-32          -1.5
