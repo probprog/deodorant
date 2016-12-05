@@ -37,7 +37,7 @@ point for further links on Clojure etc.
 
 ## License ##
 
-Copyright © Tom Rainforth, Tuan Anh Le, Jan-Willem van de Meent
+Copyright © Tom Rainforth, Tuan Anh Le, Jan-Willem van de Meent and Frank Wood
 
 Deodorant is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
