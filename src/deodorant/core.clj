@@ -51,7 +51,7 @@
 
 (defn call-lbfgs-ignoring-failure
   "Calls lbfgs within a try catch and just returns start point if it fails"
-  [f x0 max-iters verbose]
+  [f x0 max-iters]
   (try
     (apply lbfgs f x0 max-iters)
     (catch Exception e
