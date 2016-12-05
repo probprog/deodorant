@@ -3,26 +3,33 @@
 Deodorant is a Bayesian optimization package with three core features:
 
 1. Domain scaling to exploit problem independent GP hyperpriors
-
 2. A non-stationary mean function to allow unbounded optimization
-
 3. External provision of the acquisition function optimizer so that this can incorporate the constraints of the problem (inc equality constraints) and ensure that no invalid points are evaluated.
 \end{enumerate}
-  
-The main intended use of the package at present is as the BO component for BOPP (Bayesian Optimiation for Probabilistic Programs. Rainforth T, Le TA,
-  van de Meent J-W, Osborne MA, Wood F. In NIPS 2016) which provides all the
-  required inputs automatically given a program.  Even when the intention is
-  simply optimization, using BOPP rather than Deodorant directly is currently
-  recommended.  The rational of providing Deodorant as its own independent
-  package is to seperate out the parts of BOPP that are Anglican dependent and
-  those that are not.  As such, one may wish to intergrate Deodorant into
-  another similar package that provides all the required inputs.
-  
-  For details on the working of Deodorant, the previously referenced paper and
-  its supplementary material should be consulted.
-  
+
+The main intended use of the package at present is as the BO component for [BOPP](https://github.com/twgr/bopp):
+
+Rainforth, T., Le, T. A., van de Meent, J.-W., Osborne, M. A., & Wood, F. (2016). Bayesian Optimization for Probabilistic Programs. In Advances in Neural Information Processing Systems.
+
+```
+@incollection{rainforth2016bayesian,
+    title = {Bayesian Optimization for Probabilistic Programs},
+    author = {Rainforth, Tom and Le, Tuan Anh and van de Meent, Jan-Willem and Osborne, Michael A and Wood, Frank},
+    booktitle = {Advances in Neural Information Processing Systems 29},
+    editor = {D. D. Lee and M. Sugiyama and U. V. Luxburg and I. Guyon and R. Garnett},
+    pages = {280--288},
+    year = {2016},
+    publisher = {Curran Associates, Inc.},
+    url = {http://papers.nips.cc/paper/6421-bayesian-optimization-for-probabilistic-programs.pdf}
+}
+```
+
+which provides all the required inputs automatically given a program.  Even when the intention is simply optimization, using BOPP rather than Deodorant directly is currently recommended.  The rational of providing Deodorant as its own independent package is to separate out the parts of BOPP that are Anglican dependent and those that are not.  As such, one may wish to integrate Deodorant into another similar package that provides all the required inputs.
+
+For details on the working of Deodorant, the previously referenced paper and its supplementary material should be consulted.
+
 ## Installation ##
-  
+
 Though Deodorant has no direct dependency on Anglican, it has the same requirements in terms
 of java, Leiningen etc and so we refer the reader to http://www.robots.ox.ac.uk/~fwood/anglican/usage/index.html
 and recommend that users follow section 2 in the user start up guide.  The above link is also a good starting

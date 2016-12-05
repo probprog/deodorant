@@ -3,6 +3,7 @@
   :url ""
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :plugins [[lein-codox "0.10.2"]]
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [clojure-csv/clojure-csv "2.0.1"]
                  [clatrix "0.5.0"]
