@@ -1,6 +1,6 @@
 (defproject deodorant "0.1.0"
   :description "Deodorant: Solving the problems of Bayesian Optimization"
-  :url ""
+  :url "http://github.com/probprog/deodorant"
   :license {:name "GNU General Public License Version 3"
             :url "http://www.gnu.org/licenses/gpl.html"}
   :plugins [[lein-codox "0.10.2"]]
