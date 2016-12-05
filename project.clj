@@ -1,8 +1,8 @@
-(defproject deodorant "0.1.0-SNAPSHOT"
+(defproject deodorant "0.1.0"
   :description "Deodorant: Solving the problems of Bayesian Optimization"
   :url ""
-  :license {:name "Eclipse Public License"
-            :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :license {:name "GNU General Public License Version 3"
+            :url "http://www.gnu.org/licenses/gpl.html"}
   :plugins [[lein-codox "0.10.2"]]
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [clojure-csv/clojure-csv "2.0.1"]
