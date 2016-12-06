@@ -44,6 +44,7 @@ In your Clojure files, remember to require functions from `core.clj`, e.g.:
 (ns bar
   (require [deodorant.core :refer :all]))
 ```
+The full documentation can be found [here](https://probprog.github.io/deodorant/). Checkout [core/deodorant](https://probprog.github.io/deodorant/deodorant.core.html#var-deodorant) in particular.
 
 Though Deodorant has no direct dependency on Anglican, it has the same requirements in terms
 of java, Leiningen etc and so we refer the reader to http://www.robots.ox.ac.uk/~fwood/anglican/usage/index.html
