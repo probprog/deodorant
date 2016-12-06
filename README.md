@@ -30,6 +30,21 @@ For details on the working of Deodorant, the previously referenced paper and its
 
 ## Installation ##
 
+To use Deodorant in your own [Leiningen](http://leiningen.org/) projects, just include the dependency in your `project.clj`:
+```
+(defproject foo
+  ...
+  :dependencies [...
+                 [deodorant "0.1.0"]
+                 ...])
+```
+
+In your Clojure files, remember to require functions from `core.clj`, e.g.:
+```
+(ns bar
+  (require [deodorant.core :refer :all]))
+```
+
 Though Deodorant has no direct dependency on Anglican, it has the same requirements in terms
 of java, Leiningen etc and so we refer the reader to http://www.robots.ox.ac.uk/~fwood/anglican/usage/index.html
 and recommend that users follow section 2 in the user start up guide.  The above link is also a good starting
