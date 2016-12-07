@@ -15,10 +15,8 @@ Rainforth, T., Le, T. A., van de Meent, J.-W., Osborne, M. A., & Wood, F. (2016)
     title = {Bayesian Optimization for Probabilistic Programs},
     author = {Rainforth, Tom and Le, Tuan Anh and van de Meent, Jan-Willem and Osborne, Michael A and Wood, Frank},
     booktitle = {Advances in Neural Information Processing Systems 29},
-    editor = {D. D. Lee and M. Sugiyama and U. V. Luxburg and I. Guyon and R. Garnett},
     pages = {280--288},
     year = {2016},
-    publisher = {Curran Associates, Inc.},
     url = {http://papers.nips.cc/paper/6421-bayesian-optimization-for-probabilistic-programs.pdf}
 }
 ```
