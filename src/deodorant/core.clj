@@ -376,7 +376,7 @@
                 not  provided.  These outputs include alphas (gp hyper paramters),
                 gp-weights (weights for each hyperparameter sample) etc
         [empty]
-      :bo-plot-aq - Generate debugging csv of acquisition functions
+      :plot-aq - Generate debugging csv of acquisition functions
         [false]
 
   Returns:
