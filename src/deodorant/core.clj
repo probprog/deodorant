@@ -387,15 +387,20 @@
         [empty]
       :plot-aq - Generate debugging csv of acquisition functions
         [false]
+      :invert-output-display - Displays values of (- (f theta)) instead of (f theta).
+              This is because we only consider maximization such that minimization is
+              done by inverting f, in which case it may be preferable to print out
+              the univerted values (e.g. risk minimization in bopp).
+        [false]
 
   Returns:
     Lazy list of increasingly optimal triples
-    (theta, main output of f, other outputs of f)."
+    (theta, estimated value of (f theta) by gp, raw evaluated value of (f theta), other outputs of f)."
   [f aq-optimizer theta-sampler &
    {:keys [initial-points num-scaling-thetas num-initial-points cov-fn-form
            grad-cov-fn-hyper-form mean-fn-form gp-hyperprior-form b-deterministic
            hmc-step-size hmc-num-leapfrog-steps hmc-num-mcmc-steps hmc-num-opt-steps
-           hmc-num-chains hmc-burn-in-proportion hmc-max-gps verbose debug-folder plot-aq]
+           hmc-num-chains hmc-burn-in-proportion hmc-max-gps verbose debug-folder plot-aq invert-output-display]
     :or {;; Initialization options
          initial-points nil
          num-scaling-thetas 1000
@@ -420,7 +425,8 @@
          ;; Debug options
          verbose 0
          debug-folder nil
-         plot-aq false}}]
+         plot-aq false
+         invert-output-display false}}]
   (if debug-folder
     (do
       (.mkdir (java.io.File. "bopp-debug-files"))
@@ -450,6 +456,8 @@
              :verbose verbose
              :debug-folder debug-folder
              :plot-aq plot-aq))
+
+        print-transform (if invert-output-display #(- %) identity)
 
         ;; Sample some thetas to use for scaling
         num-scaling-thetas (max num-initial-points num-scaling-thetas)
@@ -561,12 +569,18 @@
                               [log-Z results] (f theta-next)
                               points (conj points
                                            [theta-next log-Z results])
-                              return-val (-> (nth points (inc i-best))
-                                             (assoc 1 (nth mean-thetas i-best)))
+                              best-point (nth points (inc i-best))
+                              return-val [(first best-point)
+                                          (nth mean-thetas i-best)
+                                          (second best-point)
+                                          (last best-point)]
 
                               ;;_ (if verbose (println :log-Z-i-best (second (nth points (inc i-best)))))
-                              _ (if verbose (println "Best theta and associated output so far: " (take 2 return-val)))
-                              _ (if verbose (println "Function value at theta next: " log-Z "\n"))]
+                              _ (if verbose
+                                        (do (println "Best theta: " (first return-val))
+                                            (println "GP mixture estimate of (f best-theta): " (print-transform (second return-val)))
+                                            (println "Evaluated (f best-theta): " (print-transform (nth return-val 2)))))
+                              _ (if verbose (println "Function value at theta next: " (print-transform log-Z) "\n"))]
                           (cons return-val
                                 (point-seq points
                                            (sf/update-scale-details
