@@ -49,7 +49,7 @@
                            grad-cov-fn-hyper x-diff-sq alpha L psi)]
     (mat/add grad-log-lik-gp (hyper-prior-grad-log-p alpha))))
 
-(defn call-lbfgs-ignoring-failure
+(defn- call-lbfgs-ignoring-failure
   "Calls lbfgs within a try catch and just returns start point if it fails"
   [f x0 max-iters]
   (try
@@ -57,7 +57,7 @@
     (catch Exception e
         x0)))
 
-(defn lbfgs-maximize
+(defn- lbfgs-maximize
   "Runs gradient ascent (LBFGS) to find a local optimum.
   .  Uses bozo which unfortunately appears to not allow
    distribution (i.e. pmap) because it uses immutable objects that
@@ -77,7 +77,7 @@
     x-max))
 
 
-(defn infer-gp-hyper
+(defn- infer-gp-hyper
   "Takes a mean-fn, a cov-fn (with unset hyperparameters), a
    series of points and hyper-prior and returns a weighted set
    of hyperparameter samples using a HMC sampler"
@@ -385,7 +385,7 @@
                 not  provided.  These outputs include alphas (gp hyper paramters),
                 gp-weights (weights for each hyperparameter sample) etc
         [empty]
-      :bo-plot-aq - Generate debugging csv of acquisition functions
+      :plot-aq - Generate debugging csv of acquisition functions
         [false]
 
   Returns:
