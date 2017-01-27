@@ -53,7 +53,7 @@
   "Calls lbfgs within a try catch and just returns start point if it fails"
   [f x0 max-iters]
   (try
-    (apply lbfgs f x0 max-iters)
+    (lbfgs f x0 {:maxit max-iters})
     (catch Exception e
         x0)))
 
@@ -84,7 +84,7 @@
   [X Y &
    {:keys [mean-fn cov-fn grad-cov-fn-hyper gp-hyperprior hmc-step-size
            hmc-num-leapfrog-steps hmc-num-mcmc-steps hmc-num-opt-steps hmc-num-chains
-           hmc-burn-in-proportion hmc-max-gps b-deterministic]
+           hmc-burn-in-proportion hmc-max-gps b-deterministic verbose]
     :or {}}]
   (let [;; working with a zero mean GP and adding mean in later
         y-bars         (gp/subtract-mean-fn mean-fn X Y)
@@ -103,24 +103,31 @@
         ;; select the points at which to initialize the hmc chains
         alpha-starts   (map vec (dp/default-hmc-initializer hmc-num-chains gp-hyperprior))
         D (first (mat/shape (first alpha-starts)))
+        f_grad_f (fn [x] (vec [(f x) (grad-f x)]))
+        alpha-starts (map #(lbfgs-maximize % f_grad_f hmc-num-opt-steps) alpha-starts)
         ; Make sure that all alphas are within the range where they won't cause issue
         ; Can probably make this larger than 9
         alpha-starts (mapv #(mop/min (repeat D 9) (mop/max (repeat D -9) %)) alpha-starts)
-        f_grad_f (fn [x] (vec [(f x) (grad-f x)]))
-        alpha-starts (map #(lbfgs-maximize % f_grad_f hmc-num-opt-steps) alpha-starts)
+
+        _ (if (> verbose 1)
+            (println :u-starts (mapv u alpha-starts)))
+
         hmc-step-size-scaled (vec (repeat D hmc-step-size))
         call-hmc-sampler   (fn [q-start]
-                             (take hmc-num-mcmc-steps (hmc/hmc-chain u grad-u hmc-step-size-scaled hmc-num-leapfrog-steps q-start)))
+                             (take hmc-num-mcmc-steps
+                                   (hmc/hmc-chain
+                                    u grad-u hmc-step-size-scaled hmc-num-leapfrog-steps q-start (u q-start))))
         thin-rate 1 ; Now using max-n-gps instead
-        [alpha-samples weights] (->> (pmap (fn [x]
-                                             (hmc/burn-in-and-thin
-                                              hmc-burn-in-proportion
-                                              thin-rate
-                                              (call-hmc-sampler x)))
-                                           alpha-starts)
-                                     (reduce concat)
-                                     vec
-                                     hmc/collapse-identical-samples)
+        alphas-and-us (reduce concat
+                          (pmap #(hmc/burn-in-and-thin
+                                    hmc-burn-in-proportion thin-rate
+                                    (call-hmc-sampler %))
+                                alpha-starts))
+        alpha-samples (mapv first alphas-and-us)
+        u-vals (mapv second alphas-and-us)
+        [alpha-samples weights] (hmc/collapse-identical-samples
+                                 alpha-samples
+                                 verbose)
         i-keep (take hmc-max-gps (shuffle (range (count weights))))
         alpha-samples (mapv #(nth alpha-samples %) i-keep)
         weights (mapv #(nth weights %) i-keep)
@@ -196,11 +203,13 @@
                                         :hmc-num-opt-steps hmc-num-opt-steps
                                         :hmc-num-chains hmc-num-chains
                                         :hmc-burn-in-proportion hmc-burn-in-proportion
-                                        :hmc-max-gps hmc-max-gps))
+                                        :hmc-max-gps hmc-max-gps
+
+                                        :verbose verbose))
         alphas (map first alpha-particles)
         gp-weights (map second alpha-particles)
 
-        ;; _ (if verbose (println :n-gps-in-acq-function (count gp-weights)))
+        _ (if (> 1 verbose) (println :n-gps-in-acq-function (count gp-weights)))
 
         ;; function to create a trained-gp-obj for a given alpha currently
         ;; create-trained-gp-obj takes x and y in the form of "points" as
@@ -231,14 +240,14 @@
                         (acq-optimizer
                           #(first (acq-fn-single %))))
         acq-opt (acq-fn-single x-next)
-        ;; _ (if verbose (println :acq-opt acq-opt))
-
 
         ;; Establish which point is best so far and the mean and std dev
         ;; for each of the evaluated points.  This is not only for sake
         ;; of the return arguments
         [means std-devs] (gp/gp-mixture-mu-sig gp-predictors gp-weights X)
         [_ i-best] (indexed-max identity means)]
+    (if (> 1 verbose) (do (println :acq-opt acq-opt)
+                        (println :i-best i-best)))
     ;; If the debug folder option is set, do some extra calculations and
     ;; output all the results
 
@@ -358,7 +367,7 @@
 
     HMC options:
       :hmc-step-size - HMC step size
-        [0.3]
+        [0.01]
       :hmc-num-leapfrog-steps - Number of HMC leap-frog steps
         [5]
       :hmc-num-chains - Number of samplers run in parallel
@@ -370,8 +379,8 @@
                      too expensive.
         [50]
     Debug options:
-      :verbose - Allow debug print outs
-        [false]
+      :verbose - debug print level: 0 (none) / 1 (iteration summaries) / 2 (detailed output)
+        [0]
       :debug-folder - Path for the debug folder.  No output generated if path
                 not  provided.  These outputs include alphas (gp hyper paramters),
                 gp-weights (weights for each hyperparameter sample) etc
@@ -409,14 +418,39 @@
          hmc-max-gps 20; 50
 
          ;; Debug options
-         verbose false
+         verbose 0
          debug-folder nil
          plot-aq false}}]
   (if debug-folder
     (do
       (.mkdir (java.io.File. "bopp-debug-files"))
       (.mkdir (java.io.File. (str "bopp-debug-files/" debug-folder)))))
-  (let [
+  (let [;; Back compatibility with verbose
+        verbose (or verbose 0)
+        verbose (if (= true verbose) 1 verbose)
+
+        ;; Print options at high debug level
+        _ (if (> verbose 1)
+            (println
+             :initial-points initial-points
+             :num-scaling-thetas num-scaling-thetas
+             :num-initial-points num-initial-points
+             :mean-fn-form mean-fn-form
+             :cov-fn-form cov-fn-form
+             :grad-cov-fn-hyper-form grad-cov-fn-hyper-form
+             :gp-hyperprior-form gp-hyperprior-form
+             :b-deterministic b-deterministic
+             :hmc-step-size hmc-step-size
+             :hmc-num-leapfrog-steps hmc-num-leapfrog-steps
+             :hmc-num-mcmc-steps hmc-num-mcmc-steps
+             :hmc-num-opt-steps hmc-num-opt-steps
+             :hmc-num-chains hmc-num-chains
+             :hmc-burn-in-proportion hmc-burn-in-proportion
+             :hmc-max-gps hmc-max-gps
+             :verbose verbose
+             :debug-folder debug-folder
+             :plot-aq plot-aq))
+
         ;; Sample some thetas to use for scaling
         num-scaling-thetas (max num-initial-points num-scaling-thetas)
         scaling-thetas (theta-sampler num-scaling-thetas)
@@ -436,6 +470,9 @@
                                (map #(into []
                                            (cons % (f %)))
                                     (mapv unflat-f initial-thetas)))
+
+        _ (if (> verbose 1)
+            (println :intial-points initial-points))
 
         ;; Setup the scaling details
         theta-min (reduce clojure.core.matrix.operators/min scaling-thetas)

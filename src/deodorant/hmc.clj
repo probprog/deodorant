@@ -43,10 +43,11 @@
   that specifies the integration step size, and a parameter num-steps
   that specifies the number of integration steps.
 
-  Returns a new sample q."
-  [u grad-u eps num-steps q-start]
+  Returns a new sample q and the value of u at q."
+  [u grad-u eps num-steps q-start u-start]
   (let [[accept-prob
-         q-end]      (try
+         q-end
+         u-end]      (try
                        (let [p-start (mat/matrix
                                       (map sample*
                                            (repeat (count q-start)
@@ -55,7 +56,6 @@
                                                           q-start p-start)
                              k-start (* 0.5 (sum (sq p-start)))
                              k-end (* 0.5 (sum (sq p-end)))
-                             u-start (u q-start)
                              u-end (u q-end)
                              accept-prob (Math/exp (+ (- u-start u-end)
                                                       (- k-start k-end)))
@@ -67,13 +67,14 @@
                                             1
                                             accept-prob)]
                             [accept-prob
-                             q-end])
+                             q-end
+                             u-end])
                        (catch Exception e
-                         [0.0 nil]))
+                         [0.0 nil nil]))
         ]
     (if (> accept-prob (rand))
-      q-end
-      q-start)))
+      [q-end u-end]
+      [q-start u-start])))
 
 (defn hmc-chain
   "Performs Hamiltonian Monte Carlo to construct a Markov Chain
@@ -82,11 +83,11 @@
   that specifies the integration step size, and a parameter num-steps
   that specifies the number of integration steps.
 
-  Returns a lazy sequence of samples q."
-  [u grad-u eps num-steps q-start]
-  (let [q-next (hmc-transition u grad-u eps num-steps q-start)]
+  Returns a lazy sequence of pairs of samples q and values of u at q."
+  [u grad-u eps num-steps q-start u-start]
+  (let [[q-next u-next] (hmc-transition u grad-u eps num-steps q-start u-start)]
     (lazy-seq
-     (cons q-next (hmc-chain u grad-u eps num-steps q-next)))))
+     (cons [q-next u-next] (hmc-chain u grad-u eps num-steps q-next u-next)))))
 
 (defn burn-in-and-thin
   "Takes the output of a markov chain, removes a number of burn-in samples
@@ -107,12 +108,15 @@
   "Takes an unweighted collection of samples and returns the unique values
   allong with a vector of the number of times they occured.  Ordering
   correspondings to the times of first apperance"
-  [samples]
+  [samples verbose]
   (let [freq (frequencies samples)
         weights (mapv second freq)
         weights (scale-vector weights (/ 1 (reduce + weights)))
         unique-samples (if (vector? samples)
                          (mapv first freq)
-                         (map first freq))
-        ]
+                         (map first freq))]
+    (if (> verbose 1)
+      (println :prop-of-thined-hmc-samples-taken
+               (double (/ (count unique-samples)
+                          (count samples)))))
     [unique-samples weights]))

@@ -1,4 +1,4 @@
-(defproject deodorant "0.1.0-SNAPSHOT"
+(defproject deodorant "0.1.1-SNAPSHOT"
   :description "Deodorant: Solving the problems of Bayesian Optimization"
   :url ""
   :license {:name "Eclipse Public License"
