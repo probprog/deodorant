@@ -209,7 +209,7 @@
         alphas (map first alpha-particles)
         gp-weights (map second alpha-particles)
 
-        _ (if (> 1 verbose) (println :n-gps-in-acq-function (count gp-weights)))
+        _ (if (> verbose 1) (println :n-gps-in-acq-function (count gp-weights)))
 
         ;; function to create a trained-gp-obj for a given alpha currently
         ;; create-trained-gp-obj takes x and y in the form of "points" as
@@ -246,7 +246,7 @@
         ;; of the return arguments
         [means std-devs] (gp/gp-mixture-mu-sig gp-predictors gp-weights X)
         [_ i-best] (indexed-max identity means)]
-    (if (> 1 verbose) (do (println :acq-opt acq-opt)
+    (if (> verbose 1) (do (println :acq-opt acq-opt)
                         (println :i-best i-best)))
     ;; If the debug folder option is set, do some extra calculations and
     ;; output all the results
