@@ -496,7 +496,7 @@
 ;;                   (println :initial-log-Zs initial-log-Zs)))
     (letfn [(point-seq [points scale-details]
                        (lazy-seq
-                        (let [_ (if verbose (println "BO Iteration: " (inc (- (count points) (inc num-initial-points)))))
+                        (let [_ (if (> verbose 0) (println "BO Iteration: " (inc (- (count points) (inc num-initial-points)))))
                               scaling-funcs (sf/setup-scaling-funcs
                                              scale-details)
 
@@ -556,15 +556,8 @@
                               std-dev-thetas ((:log-Z-unscaler-no-centering scaling-funcs)
                                           std-dev-thetas-sc)
 
-                              _ (if verbose (do
-;;                                               (println :theta-best (first (nth points i-best)) "   "
-;;                                                        :log-Z-theta-best (second (nth points i-best)) "   "
-;;                                                        :mean-theta-best (nth mean-thetas i-best) "   "
-;;                                                        :std-dev-theta-best (nth std-dev-thetas i-best) "   "
-;;                                                        :i-best i-best)
-                                              (println "Theta to evaluate next: " theta-next)
-;;                                               (println "Calling original query with theta next  ")
-                                              ))
+                              _ (if (> verbose 0)
+                                    (do (println "Theta to evaluate next: " theta-next)))
 
                               [log-Z results] (f theta-next)
                               points (conj points
@@ -576,11 +569,11 @@
                                           (last best-point)]
 
                               ;;_ (if verbose (println :log-Z-i-best (second (nth points (inc i-best)))))
-                              _ (if verbose
+                              _ (if (> verbose 0)
                                         (do (println "Best theta: " (first return-val))
                                             (println "GP mixture estimate of (f best-theta): " (print-transform (second return-val)))
                                             (println "Evaluated (f best-theta): " (print-transform (nth return-val 2)))))
-                              _ (if verbose (println "Function value at theta next: " (print-transform log-Z) "\n"))]
+                              _ (if (> verbose 0) (println "Function value at theta next: " (print-transform log-Z) "\n"))]
                           (cons return-val
                                 (point-seq points
                                            (sf/update-scale-details
