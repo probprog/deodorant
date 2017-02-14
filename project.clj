@@ -1,4 +1,4 @@
-(defproject deodorant "0.1.1"
+(defproject deodorant "0.1.2"
   :description "Deodorant: Solving the problems of Bayesian Optimization"
   :url "http://github.com/probprog/deodorant"
   :license {:name "GNU General Public License Version 3"
