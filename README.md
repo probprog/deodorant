@@ -32,7 +32,7 @@ To use Deodorant in your own [Leiningen](http://leiningen.org/) projects, just i
 (defproject foo
   ...
   :dependencies [...
-                 [deodorant "0.1.1"]
+                 [deodorant "0.1.3"]
                  ...])
 ```
 
