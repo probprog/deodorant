@@ -345,9 +345,13 @@
   Optional Inputs: (defined with key value pairs, default values shown below
                     in brackets)
     Initialization options:
-      :initial-points - Points to initialize BO in addition to those sampled
-                       by theta-sampler
+      :initial-points - Pre-evaluated points (i.e. theta and output)
+        in addition to those sampled by theta-sampler.  To see correct formatting,
+        run without specifying and verbose > 1.
         [nil]
+      :initial-thetas - Points to evaluate at start in addition to randomly sampled
+        points (i.e. total number of initialization is points provided here +
+        :num-initial-points). To see correct formatting, run without specifying and verbose > 1.
       :num-scaling-thetas - Number of points used to initialize scaling
         [50]
       :num-initial-points - Number of points to initialize BO
@@ -397,12 +401,13 @@
     Lazy list of increasingly optimal triples
     (theta, estimated value of (f theta) by gp, raw evaluated value of (f theta), other outputs of f)."
   [f aq-optimizer theta-sampler &
-   {:keys [initial-points num-scaling-thetas num-initial-points cov-fn-form
+   {:keys [initial-points initial-thetas num-scaling-thetas num-initial-points cov-fn-form
            grad-cov-fn-hyper-form mean-fn-form gp-hyperprior-form b-deterministic
            hmc-step-size hmc-num-leapfrog-steps hmc-num-mcmc-steps hmc-num-opt-steps
            hmc-num-chains hmc-burn-in-proportion hmc-max-gps verbose debug-folder plot-aq invert-output-display]
     :or {;; Initialization options
          initial-points nil
+         initial-thetas nil
          num-scaling-thetas 1000
          num-initial-points 5
 
@@ -439,6 +444,7 @@
         _ (if (> verbose 1)
             (println
              :initial-points initial-points
+             :initial-thetas initial-thetas
              :num-scaling-thetas num-scaling-thetas
              :num-initial-points num-initial-points
              :mean-fn-form mean-fn-form
@@ -464,20 +470,25 @@
         scaling-thetas (theta-sampler num-scaling-thetas)
         [flat-f unflat-f] (sf/flatten-unflatten (first scaling-thetas))
         scaling-thetas (mapv flat-f scaling-thetas)
+        
+        b-integer (mapv #(or (instance? Long %) (instance? Integer %)) (first scaling-thetas))
 
         ;; FIXME add code to keep randomly sampling until distinct inputs and distinct outputs have been found
 
         ;; Choose a subset of scaling thetas and evaluate as the starting points
-        initial-thetas (mapv #(nth scaling-thetas %)
-                             (take num-initial-points
-                                   (shuffle (range 0 (count scaling-thetas)))))
-
-        b-integer (mapv #(or (instance? Long %) (instance? Integer %)) (first initial-thetas))
+        initial-theta-samples (mapv #(unflat-f (nth scaling-thetas %))
+                                   (take num-initial-points
+                                         (shuffle (range 0 (count scaling-thetas)))))
+        
+        initial-thetas (concat initial-thetas initial-theta-samples)
+        
+        _ (if (> verbose 1)
+            (println :intial-thetas initial-thetas))
 
         initial-points (concat initial-points
                                (map #(into []
                                            (cons % (f %)))
-                                    (mapv unflat-f initial-thetas)))
+                                    initial-thetas))
 
         _ (if (> verbose 1)
             (println :intial-points initial-points))
@@ -492,8 +503,6 @@
                                                       theta-max
                                                       log-Z-min
                                                       log-Z-max)]
-;;     (if verbose (do (println :initial-thetas initial-thetas)
-;;                   (println :initial-log-Zs initial-log-Zs)))
     (letfn [(point-seq [points scale-details]
                        (lazy-seq
                         (let [_ (if (> verbose 0) (println "BO Iteration: " (inc (- (count points) (inc num-initial-points)))))
